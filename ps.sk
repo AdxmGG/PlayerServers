@@ -1,0 +1,453 @@
+options:
+    
+    # The main lobby of the PlayerServers network. TYPE: N/A
+    lobby world: world 
+
+    # Max amount of players per PlayerServer. TYPE: INT
+    max players: 10
+
+    # Max amount of addons per PlayerServer. TYPE: INT
+    max addons: 5
+
+    # Max PlayerServers online at one time. TYPE: INT
+    max servers: 10
+
+    # Default 
+    motd: "Hosted by PlayerServers." # Default MOTD when a playerserver is created. TYPE: STR
+
+    P: &c[PlayerServers]&7
+    V: dev1.1
+
+
+
+
+on script load:
+    set {ps::validchars::*} to "" and "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", " ", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"
+
+command /create [<text>] [<text>]: 
+    trigger:
+        if (player does not have permission "playerservers.create"):
+            send "{@P} You are lacking the permission &bplayerservers.create&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/create (name)&7."
+            stop
+        if arg-1 is "own":
+            send "{@P} This is an invalid server name."
+            stop
+        if length of arg-1 > 15:
+            send "{@P} The chosen name is too long."
+            stop
+        set {_arg::*} to split arg-1 at ""
+        loop {_arg::*}:
+            if {ps::validchars::*} does not contain loop-value:
+                send "{@P} You cannot use &b%loop-value%&7 in the server name."
+                stop
+        psCreateServer(arg-1, player)
+        
+command /delete [<text>]:
+    trigger:
+        if (player does not have permission "playerservers.delete"):
+            send "{@P} You are lacking the permission &bplayerservers.delete&7."
+            stop
+        psDelete(player)
+command /join [<text>]:
+    trigger:
+        if (player does not have permission "playerservers.join"):
+            send "{@P} You are lacking the permission &bplayerservers.join&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/join (name | own)&7."
+            stop
+        if arg-1 is "own":
+            psJoin({ps::player::%player's uuid%}, player)
+            stop
+        psJoin(arg-1, player)
+command /servers:
+    aliases: online
+    trigger:
+        if (player does not have permission "playerservers.ps"):
+            send "{@P} You are lacking the permission &bplayerservers.ps&7."
+            stop
+        psOnline(player)
+command /suspend [<text>]:
+    trigger:
+        if (player does not have permission "playerservers.suspend"):
+            send "{@P} You are lacking the permission &bplayerservers.suspend&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/suspend (server)&7."
+            send "&7- Note: If a server is suspended, the owner will not be able to delete it."
+            stop
+        add arg-1 to {ps::list::suspended::*}
+        psUnload(arg-1)
+        send "{@P} &b%arg-1%&7 has been suspended."
+        send "&7- Note: If a server is suspended, the owner will not be able to delete it."
+command /unsuspend [<text>]:
+    trigger:
+        if (player does not have permission "playerservers.unsuspend"):
+            send "{@P} You are lacking the permission &bplayerservers.unsuspend&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/unsuspend (server)&7."
+            stop
+        remove arg-1 from {ps::list::suspended::*}
+        send "{@P} &b%arg-1%&7 has been unsuspended."
+function psCreateServer(N: text, P: player):
+    set {_U} to {_P}'s uuid
+    if ({ps::player::%{_U}%} is set):
+        send "{@P} You already own a server, join it by using &b/join %{ps::player::%{_U}%}%&7." to {_P}
+        stop
+    if ({ps::list::names::*} contains {_N}):
+        send "{@P} The name &b%{_N}%&7 is already taken." to {_P}
+        stop
+    send "{@P} Creating your server..." to {_P}
+    wait 3 ticks
+    console command "mvc %{_N}% normal"
+    wait 40 ticks
+    psUnload({_N})
+    wait 20 ticks
+    add {_N} to {ps::list::names::*}
+    set {ps::player::%{_U}%} to {_N}
+    set {ps::server::%{_N}%} to {_U}
+    add {_P} to {ps::server::%{_N}%::ops::*}
+    set {ps::server::%{_N}%::max-players} to {@max players}
+    set {ps::server::%{_N}%::max-addons} to {@max addons}
+    set {ps::server::%{_N}%::motd} to {@motd}
+    send "{@P} Your server has been created, join it by using &b/join %{ps::player::%{_U}%}%&7." to {_P}
+function psDelete(P: player):
+    set {_U} to {_P}'s uuid
+    set {_N} to {ps::player::%{_U}%}
+    if ({ps::player::%{_U}%} is not set):
+        send "{@P} You do not own a server, create one by using &b/create (name)&7." to {_P}
+        stop
+    if ({ps::list::suspended::*} contains {_N}):
+        send "{@P} Your server has been suspended, which means you cannot delete it." to {_P}
+        stop
+    send "{@P} Deleting your server, &b%{ps::player::%{_U}%}%&7." to {_P}
+    remove {_N} from {ps::list::names::*}
+    remove {_N} from {ps::list::online::*}
+    delete {ps::player::%{_U}%}
+    delete {ps::server::%{_N}%}
+    delete {ps::server::%{_N}%::*}
+    console command "mv delete %{_N}%"
+    wait 5 ticks
+    console command "mv confirm"
+    wait 20 ticks
+    send "{@P} Your server has been deleted. You can create a new one using &b/create (name)&7." to {_P}
+function psJoin(N: text, P: player):
+    set {_U} to {_P}'s uuid
+    if {ps::server::%{_N}%} is not set:
+        send "{@P} The server &b%{_N}%&7 could not be found." to {_P}
+        stop
+    if amount of all players in world({_N}) >= {@max players}:
+        send "{@P} The server &b%{_N}%&7 is full!" to {_P}
+        stop
+    if {ps::server::%{_N}%::whiteliststatus} is true:
+        if {ps::server::%{_N}%::whitelist::*} does not contain {_P}:
+            if {ps::player::%{_U}%} is not {_N}:
+                send "{@P} You are not whitelisted on this server." to {_P}
+                stop
+    if {ps::server::%{_N}%::bans::*} contains {_P}:
+        if {ps::player::%{_U}%} is not {_N}:
+            send "{@P} You are banned from this server." to {_P}
+            stop
+    send "{@P} Sending you to &b%{_N}%&7." to {_P}
+    psLoad({_N}, {_P})
+    wait 5 ticks
+    console command "mvtp %{_P}% %{_N}%"
+    wait 5 ticks
+    psUpdateTab({_P})
+function psLoad(N: text, P: player):
+    if ({ps::list::suspended::*} contains {_N}):
+        send "{@P} This server has been suspended." to {_P}
+        stop
+    if ({ps::list::online::*} contains {_N}):
+        stop
+    if (amount of {ps::list::online::*} >= {@max servers}):
+        send "{@P} There are too many online servers." to {_P}
+        stop
+    console command "mvload %{_N}%"
+    wait 30 ticks
+    add {_N} to {ps::list::online::*}
+function psUnload(N: text):
+    if ({ps::list::online::*} does not contain {_N}):
+        stop
+    console command "mvunload %{_N}%"
+    wait 30 ticks
+    remove {_N} from {ps::list::online::*}
+function psOnline(P: player):
+    set {_GUI} to chest inventory with 4 rows named "{@P} &8Server List"
+    set {_S} to 0
+    loop {ps::list::online::*}:
+        set {_server-name} to loop-value
+        set {_server-owner} to {ps::server::%{_server-name}%} parsed as offline player
+        set {_server-motd} to {ps::server::%{_server-name}%::motd}
+        set {_players} to amount of all players in world({_server-name})
+        set {_max-players} to {ps::server::%{_server-name}%::max-players}
+        set slot {_S} of {_GUI} to oak sign named "&b%{_server-name}%" with lore "" and "&7Owner &b%{_server-owner}%" and "&7MOTD &b%{_server-motd}%" and "&7Players &b%{_players}%&7/&b%{_max-players}%" and ""
+        add 1 to {_S}
+    set metadata "psGUI" of {_P} to "online"
+    open {_GUI} to {_P}
+function psUpdateTab(P: player):
+    set {_P}'s tab list header to "%nl%  {@P}  %nl%"
+    set {_P}'s tab list footer to "%nl%&7SERVER &b%{_P}'s world%%nl%"
+function psPanel(P: player):
+    set {_U} to {_P}'s uuid
+    set {_GUI} to chest inventory with 3 rows named "{@P} &8Panel"
+    set slot 10 of {_GUI} to {_P}'s head named "&bPlayers" with lore "" and "&7- View and manage online players." and ""
+    set slot 12 of {_GUI} to compass named "&bAddons" with lore "" and "&7- Install addons to your server." and "&7- This will only work if the &bAddons Module&7 has been installed. (/modules)" and ""
+    set slot 14 of {_GUI} to oak sign named "&bMOTD" with lore "" and "&7- Current MOTD &b%{ps::server::%{ps::player::%{_U}%}%::motd}%" and "&7- Click to change." and ""
+    set slot 16 of {_GUI} to redstone block named "&bStop" with lore "" and "&7- Stop the server." and ""
+    set metadata "psGUI" of {_P} to "panel"
+    open {_GUI} to {_P}
+# made by adam <3
+function psAddons(P: player):
+    set {_U} to {_P}'s uuid
+    set {_server} to {_P}'s world
+    set {_GUI} to chest inventory with 3 rows named "{@P} &8Panel > Addons"
+    set {_S} to 0
+    loop {ps::module::addons::*}:
+        set {_split::*} to loop-value split at "|"
+        if {ps::server::%{_server}%::addons::*} does not contain {_split::1}:
+            set slot {_S} of {_GUI} to red concrete named "&b%{_split::1}%" with lore "" and "&7- %{_split::2}%" and "&7- Status &cNot Installed" and ""
+        else:
+            set slot {_S} of {_GUI} to green concrete named "&b%{_split::1}%" with lore "" and "&7- %{_split::2}%" and "&7- Status &aInstalled" and ""
+        add 1 to {_S}
+    set metadata "psGUI" of {_P} to "addons"
+    open {_GUI} to {_P}
+function psPlayers(P: player):
+    set {_U} to {_P}'s uuid
+    set {_server} to {_P}'s world
+    set {_GUI} to chest inventory with 3 rows named "{@P} &8Panel > Players"
+    set {_S} to 0
+    loop all players in world {_server}:
+        set slot {_S} of {_GUI} to skull of loop-player named "&b%loop-value%" with lore "" and "&7- &bCick&7 to teleport." and ""
+        add 1 to {_S}
+    open {_GUI} to {_P}
+    set metadata "psGUI" of {_P} to "players"
+on inventory click:
+    if (metadata "psGUI" of player is "online"):
+        delete metadata "psGUI" of player
+        cancel event
+        close player's inventory
+        set {_server-name} to name of clicked slot
+        replace all "&b" with "" in {_server-name}
+        psJoin({_server-name}, player)
+    else if (metadata "psGUI" of player is "panel"):
+        delete metadata "psGUI" of player
+        cancel event
+        close player's inventory
+        if clicked slot is 12:
+            if {ps::module::addons} is not set:
+                send "{@P} This server does not have the Addons Module installed."
+                send "&7- &c&lNETWORK OWNERS: &7You can learn how to install this <link:https://docs.playerservers.xyz/adding-modules>&b&nhere<reset>&7."
+                stop
+            psAddons(player)
+            stop
+        if clicked slot is 16:
+            delete metadata "psGUI" of player
+            psUnload("%player's world%")
+            stop
+        if clicked slot is 14:
+            delete metadata "psGUI" of player
+            send "{@P} Syntax &b/motd (motd)&7."
+            stop
+        if clicked slot is 10:
+            delete metadata "psGUI" of player
+            psPlayers(player)
+    else if (metadata "psGUI" of player is "players"):
+        delete metadata "psGUI" of player
+        cancel event
+        close player's inventory
+        set {_player} to name of clicked slot
+        replace all "&b" in {_player} with ""
+        teleport player to ({_player} parsed as player)
+        send "{@P} Teleporting you to &b%{_player}%&7."
+    else if (metadata "psGUI" of player is "addons"):
+        delete metadata "psGUI" of player
+        cancel event
+        close player's inventory
+        set {_addon} to name of clicked slot
+        replace all "&b" in {_addon} with ""
+        if {ps::server::%player's world%::addons::*} does not contain {_addon}:
+            add {_addon} to {ps::server::%player's world%::addons::*}
+            send "{@P} &b%{_addon}%&7 has been installed."
+        else:
+            remove {_addon} from {ps::server::%player's world%::addons::*}
+            send "{@P} &b%{_addon}%&7 has been uninstalled."
+command /lobby:
+    aliases: hub
+    trigger:
+        console command "mvtp %player% {@lobby world}"
+        send "{@P} Sending you to the lobby."
+        psUpdateTab(player)
+
+on chat:
+    cancel event
+    send "%player%: %message%" to all players in player's world
+
+command /modules:
+    trigger:
+        send "{@P} View a list of our modules <url:https://docs.playerservers.xyz/adding-modules##module-list>&b&nhere<reset>&7."
+
+command /whitelist [<text>] [<offlineplayer>]:
+    trigger:
+        if ({ps::server::%player's world%::ops::*} does not contain player):
+            send "{@P} You can only run this commands if you're a &bserver operator&7 on &b%player's world%&7."
+            stop
+        else if arg-1 is not set:
+            send "{@P} Syntax &b/whitelist list&7."
+            send "{@P} Syntax &b/whitelist on&7."
+            send "{@P} Syntax &b/whitelist off&7."
+            send "{@P} Syntax &b/whitelist add (player)&7."
+            send "{@P} Syntax &b/whitelist remove (player)&7."
+            stop
+        else if arg-1 is "list":
+            send "{@P} The following people can join the server."
+            send "&7- %{ps::server::%player's world%::whitelist::*}%" if {ps::server::%player's world%::whitelist::*} is set else ("&7- None")
+        else if arg-1 is "on":
+            set {ps::server::%player's world%::whiteliststatus} to true
+            send "{@P} The whitelist has been &aenabled&7, run &b/whitelist list&7 to see who is able to join the server."
+        else if arg-1 is "off":
+            delete {ps::server::%player's world%::whiteliststatus}
+            send "{@P} The whitelist has been &cdisabled&7."
+        else if arg-1 is "add":
+            if arg-2 is not set:
+                send "{@P} Syntax &b/whitelist add (player)&7."
+                stop
+            add arg-2 to {ps::server::%player's world%::whitelist::*}
+            send "{@P} &b%arg-2%&7 has been added to the whitelist."
+        else if arg-1 is "remove":
+            if arg-2 is not set:
+                send "{@P} Syntax &b/whitelist remove (player)&7."
+                stop
+            remove arg-2 from {ps::server::%player's world%::whitelist::*}
+            send "{@P} &b%arg-2%&7 has been removed from the whitelist."
+
+command /kick [<offlineplayer>] [<text>]:
+    trigger:
+        if ({ps::server::%player's world%::ops::*} does not contain player):
+            send "{@P} You can only run this commands if you're a &bserver operator&7 on &b%player's world%&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/kick (player) [reason]&7."
+        else if arg-1 and arg-2 are set:
+            send "{@P} You have been kicked from &b%player's world%&7 due to &b%arg-2%&7." to arg-1
+            send "{@P} You have kicked &b%arg-1%&7 due to &b%arg-2%&7." to player
+        else if arg-2 is not set:
+            send "{@P} You have been kicked from &b%player's world%&7." to arg-1
+            send "{@P} You have kicked &b%arg-1%&7." to player
+        console command "mvtp %arg-1% {@lobby world}"
+
+command /ban [<offlineplayer>] [<text>]:
+    trigger:
+        if ({ps::server::%player's world%::ops::*} does not contain player):
+            send "{@P} You can only run this commands if you're a &bserver operator&7 on &b%player's world%&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/ban (player) [reason]&7."
+        else if arg-1 and arg-2 are set:
+            send "{@P} You have been banned from &b%player's world%&7 due to &b%arg-2%&7." to arg-1
+            send "{@P} You have banned &b%arg-1%&7 due to &b%arg-2%&7." to player
+        else if arg-2 is not set:
+            send "{@P} You have been banned from &b%player's world%&7." to arg-1
+            send "{@P} You have banned &b%arg-1%&7." to player
+        if {ps::server::%player's world%::bans::*} does not contain arg-1:
+            add arg-1's uuid to {ps::server::%player's world%::bans::*}
+        console command "mvtp %arg-1% {@lobby world}"
+command /unban [<offlineplayer>]:
+    trigger:
+        if ({ps::server::%player's world%::ops::*} does not contain player):
+            send "{@P} You can only run this commands if you're a &bserver operator&7 on &b%player's world%&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/unban (player)&7."
+            stop
+        remove arg-1's uuid from {ps::server::%player's world%::bans::*}
+        send "{@P} Unbanned &b%arg-1%&7."
+command /banlist:
+    trigger:
+        if ({ps::server::%player's world%::ops::*} does not contain player):
+            send "{@P} You can only run this commands if you're a &bserver operator&7 on &b%player's world%&7."
+            stop
+        if {ps::server::%player's world%::bans::*} is not set:
+            send "&7- None"
+            stop
+        loop {ps::server::%player's world%::bans::*}:
+            send "&7- %loop-value parsed as offline player% (%loop-value%)"
+
+command /motd [<text>]:
+    trigger:
+        if arg-1 is not set:
+            send "{@P} CURRENT MOTD &b%{ps::server::%player's world%::motd}%"
+            send "&7- Use &b/motd (new motd) &7to set a new MOTD."
+            stop
+        set {_arg::*} to split arg-1 at ""  
+        loop {_arg::*}:
+            if {ps::validchars::*} does not contain loop-value:
+                send "{@P} You cannot use &b%loop-value%&7 in the server motd."
+                stop
+        set {ps::server::%player's world%::motd} to arg-1
+        send "{@P} The MOTD has been updated to &b%arg-1%&7."
+
+command /op [<offlineplayer>]:
+    trigger:
+        if ({ps::player::%player's uuid%} != player's world):
+            send "{@P} You can only run this commands if you're the &bserver owner&7 of &b%player's world%&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/op (player)&7."
+            stop
+        if {ps::server::%player's world%::ops::*} does not contain arg-1:
+            add arg-1 to {ps::server::%player's world%::ops::*}
+        send "{@P} &b%arg-1%&7 has been made a &bserver operator&7."
+
+command /stop:
+    trigger:
+        if ({ps::player::%player's uuid%} != player's world):
+            send "{@P} You can only run this commands if you're the &bserver owner&7 of &b%player's world%&7."
+            stop
+        psUnload("%player's world%")
+command /deop [<offlineplayer>]:
+    trigger:
+        if ({ps::player::%player's uuid%} != player's world):
+            send "{@P} You can only run this commands if you're the &bserver owner&7 of &b%player's world%&7."
+            stop
+        if arg-1 is not set:
+            send "{@P} Syntax &b/deop (player)&7."
+            stop
+        if {ps::server::%player's world%::ops::*} contains arg-1:
+            remove arg-1 from {ps::server::%player's world%::ops::*}
+        send "{@P} &b%arg-1%&7 is not longer a &bserver operator&7."
+command /gamemode [<gamemode>] [<offlineplayer=%player%>]:
+    aliases: gm
+    trigger:
+        if ({ps::server::%player's world%::ops::*} does not contain player):
+            send "{@P} You can only run this commands if you're a &bserver operator&7 on &b%player's world%&7."
+            stop
+        if arg-1 is set:
+            set arg-2's gamemode to arg-1
+            send "{@P} &b%arg-2%&7's gamemode has been updated to &b%arg-1%&7."
+        else:
+            send "{@P} Syntax &b/gamemode&o(/gm)&b (creative | survival | adventure | spectator) [player]&7."
+command /pl:
+    trigger:
+        if {ps::module::addons} is not set:
+            send "{@P} This server does not have the Addons Module installed."
+            send "&7- &c&lNETWORK OWNERS: &7You can learn how to install this <link:https://docs.playerservers.xyz/adding-modules>&b&nhere<reset>&7."
+            stop
+        else:
+            send "&7- %{ps::server::%player's world%::addons::*} ? ""None""%"
+command /panel:
+    aliases: control
+    trigger:
+        if ({ps::player::%player's uuid%} != player's world):
+            send "{@P} You can only run this commands if you're the &bserver owner&7 of &b%player's world%&7."
+            stop
+        psPanel(player)
+command /playerservers:
+    aliases: ps
+    trigger:
+        send "&7This server is running {@P}, version &b{@V}&7."
+        send "&7You can visit our documentation <link:https://docs.playerservers.xyz>&b&nhere<reset>&7."
