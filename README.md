@@ -12,9 +12,6 @@ A script that allows players to create their own servers within a server.
 # [ Download ]
 * [Click to download](https://github.com/AdxmGG/PlayerServers/releases).
 
-## [ Screenshots ]
-*soon*
-
 ## [ Suggest a feature / Report a bug ]
 * You can either join our [discord server](https://discord.gg/Z6jjusAc5h), or create a [new issue](https://github.com/AdxmGG/PlayerServers/issues) and select the correct category.
 * Please do not leave bug reports or feature requests in the reviews. I expect there to be bugs, please report them in the right place so they can be fixed asap.
