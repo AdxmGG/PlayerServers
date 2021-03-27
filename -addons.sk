@@ -1,0 +1,47 @@
+on script load:
+    set {ps::module::addons} to true
+    set {ps::module::addons::*} to "Social|This addon allows players to add social medias to their server. For example, twitter or discord.", "Staff Chat|Start your messges with ""##"" and they'll be sent to your staff!" and "One Player Sleep|This addon allows one player to sleep for the entire server to turn to day."
+on script unload:
+    delete {ps::module::addons}
+
+# SOCIALS ADDON
+
+command /socials:
+    trigger:
+        if {ps::server::%player's world%::addons::*} does not contain "Social":
+            send "&c[Social]&7 The &bSocial&7 addon is not installed!"
+            stop
+        send "&c[Social] &b%player's world%&7 socials:"
+        send "&7- Twitter &b%{ps::server::%player's world%::socials::twitter}%" if {ps::server::%player's world%::socials::twitter} is set else ("&7- Twitter &bNot Set")
+        send "&7- Discord &b%{ps::server::%player's world%::socials::discord}%" if {ps::server::%player's world%::socials::discord} is set else ("&7- Discord &bNot Set")
+        send "&7- Instagram &b%{ps::server::%player's world%::socials::instagram}%" if {ps::server::%player's world%::socials::instagram} is set else ("&7- Instagram &bNot Set")
+
+command /social [<text>] [<text>]:
+    trigger:
+        if ({ps::server::%player's world%::ops::*} does not contain player):
+            send "&c[Social]&7 You can only run this commands if you're a &bserver operator&7 on &b%player's world%&7."
+            stop
+        if {ps::server::%player's world%::addons::*} does not contain "Social":
+            send "&c[Social]&7 The &bSocial&7 addon is not installed!"
+            stop
+        if arg-1 is "twitter" or "discord" or "instagram":
+            set {ps::server::%player's world%::socials::%arg-1%} to arg-2
+            send "&c[Social]&7 &b%arg-1%&7 has been set to &b%{ps::server::%player's world%::socials::%arg-1%}%&7."
+        else:
+            send "&c[Social]&7 Syntax &b/social (twitter | discord | instagram) (@name | url)"
+            stop
+
+on bed enter:
+    if {ps::server::%player's world%::addons::*} does not contain "One Player Sleep":
+        stop
+    set time in world to day
+    send "&c[One Player Sleep]&7 The time has been set to day!" to all players in player's world
+
+on chat:
+    if {ps::server::%player's world%::addons::*} does not contain "Staff Chat":
+        stop
+    if message starts with "##":
+        if {ps::server::%player's world%::ops::*} contains player:
+            cancel event
+            replace all "##" in message with ""
+            send "&c[Staff Chat] &7%player%: %message%" to {ps::server::%player's world%::ops::*}
