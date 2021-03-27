@@ -1,6 +1,14 @@
+# features - add server selector icon when join lobby, get sent to lobby on join
+# optimisations - function for parsing valid args
+# bug fixes - cant suspend server if already suspended vice verca, can only suspend valid servers vice versa.
+# do: /find, server shutdown when 0 players
+
 options:
     
-    # The main lobby of the PlayerServers network. TYPE: N/A
+    # Item of the server selector gui in inventory. TYPE: ITEM
+    server selector: nether star
+
+    # The main lobby of the PlayerServers network. TYPE: WORLD NAME
     lobby world: world 
 
     # Max amount of players per PlayerServer. TYPE: INT
@@ -16,13 +24,24 @@ options:
     motd: "Hosted by PlayerServers." # Default MOTD when a playerserver is created. TYPE: STR
 
     P: &c[PlayerServers]&7
-    V: dev1.1
-
-
+    V: dev1.3
 
 
 on script load:
     set {ps::validchars::*} to "" and "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", " ", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"
+
+on join:
+    wait 3 ticks
+    console command "mv tp %player% {@lobby world}"
+    clear player's inventory
+    set slot 4 of player to {@server selector} named "&7Server Selector"
+
+function validArg(A: text) :: boolean:
+    set {_arg::*} to split {_A} at ""
+    loop {_arg::*}:
+        if {ps::validchars::*} does not contain loop-value:
+            return false
+    return true
 
 command /create [<text>] [<text>]: 
     trigger:
@@ -38,11 +57,9 @@ command /create [<text>] [<text>]:
         if length of arg-1 > 15:
             send "{@P} The chosen name is too long."
             stop
-        set {_arg::*} to split arg-1 at ""
-        loop {_arg::*}:
-            if {ps::validchars::*} does not contain loop-value:
-                send "{@P} You cannot use &b%loop-value%&7 in the server name."
-                stop
+        if validArg(arg-1) is false:
+            send "{@P} You have used an invalid character in your server name."
+            stop
         psCreateServer(arg-1, player)
         
 command /delete [<text>]:
@@ -51,6 +68,7 @@ command /delete [<text>]:
             send "{@P} You are lacking the permission &bplayerservers.delete&7."
             stop
         psDelete(player)
+
 command /join [<text>]:
     trigger:
         if (player does not have permission "playerservers.join"):
@@ -63,6 +81,7 @@ command /join [<text>]:
             psJoin({ps::player::%player's uuid%}, player)
             stop
         psJoin(arg-1, player)
+
 command /servers:
     aliases: online
     trigger:
@@ -70,6 +89,7 @@ command /servers:
             send "{@P} You are lacking the permission &bplayerservers.ps&7."
             stop
         psOnline(player)
+
 command /suspend [<text>]:
     trigger:
         if (player does not have permission "playerservers.suspend"):
@@ -79,10 +99,17 @@ command /suspend [<text>]:
             send "{@P} Syntax &b/suspend (server)&7."
             send "&7- Note: If a server is suspended, the owner will not be able to delete it."
             stop
+        if {ps::list::names::*} does not contain arg-1:
+            send "{@P} This is not a valid server."
+            stop
+        if {ps::list::suspended::*} contains arg-1:
+            send "{@P} This server is already suspended."
+            stop
         add arg-1 to {ps::list::suspended::*}
         psUnload(arg-1)
         send "{@P} &b%arg-1%&7 has been suspended."
         send "&7- Note: If a server is suspended, the owner will not be able to delete it."
+
 command /unsuspend [<text>]:
     trigger:
         if (player does not have permission "playerservers.unsuspend"):
@@ -91,8 +118,15 @@ command /unsuspend [<text>]:
         if arg-1 is not set:
             send "{@P} Syntax &b/unsuspend (server)&7."
             stop
+        if {ps::list::names::*} does not contain arg-1:
+            send "{@P} This is not a valid server."
+            stop
+        if {ps::list::suspended::*} does not contain arg-1:
+            send "{@P} This server is not suspended."
+            stop
         remove arg-1 from {ps::list::suspended::*}
         send "{@P} &b%arg-1%&7 has been unsuspended."
+
 function psCreateServer(N: text, P: player):
     set {_U} to {_P}'s uuid
     if ({ps::player::%{_U}%} is set):
@@ -115,6 +149,7 @@ function psCreateServer(N: text, P: player):
     set {ps::server::%{_N}%::max-addons} to {@max addons}
     set {ps::server::%{_N}%::motd} to {@motd}
     send "{@P} Your server has been created, join it by using &b/join %{ps::player::%{_U}%}%&7." to {_P}
+
 function psDelete(P: player):
     set {_U} to {_P}'s uuid
     set {_N} to {ps::player::%{_U}%}
@@ -135,6 +170,7 @@ function psDelete(P: player):
     console command "mv confirm"
     wait 20 ticks
     send "{@P} Your server has been deleted. You can create a new one using &b/create (name)&7." to {_P}
+
 function psJoin(N: text, P: player):
     set {_U} to {_P}'s uuid
     if {ps::server::%{_N}%} is not set:
@@ -158,6 +194,7 @@ function psJoin(N: text, P: player):
     console command "mvtp %{_P}% %{_N}%"
     wait 5 ticks
     psUpdateTab({_P})
+
 function psLoad(N: text, P: player):
     if ({ps::list::suspended::*} contains {_N}):
         send "{@P} This server has been suspended." to {_P}
@@ -170,12 +207,14 @@ function psLoad(N: text, P: player):
     console command "mvload %{_N}%"
     wait 30 ticks
     add {_N} to {ps::list::online::*}
+
 function psUnload(N: text):
     if ({ps::list::online::*} does not contain {_N}):
         stop
     console command "mvunload %{_N}%"
     wait 30 ticks
     remove {_N} from {ps::list::online::*}
+
 function psOnline(P: player):
     set {_GUI} to chest inventory with 4 rows named "{@P} &8Server List"
     set {_S} to 0
@@ -189,6 +228,7 @@ function psOnline(P: player):
         add 1 to {_S}
     set metadata "psGUI" of {_P} to "online"
     open {_GUI} to {_P}
+
 function psUpdateTab(P: player):
     set {_P}'s tab list header to "%nl%  {@P}  %nl%"
     set {_P}'s tab list footer to "%nl%&7SERVER &b%{_P}'s world%%nl%"
